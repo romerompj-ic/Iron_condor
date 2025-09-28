@@ -9,10 +9,20 @@ Fecha: 2025-09-28
 
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 from datetime import datetime
 import time
 from agente_iron_condor_final import AgenteIronCondorSPX
+
+# Importación robusta de plotly
+try:
+    import plotly.graph_objects as go
+    import plotly.express as px
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    st.warning("⚠️ Plotly no está disponible. Los gráficos se mostrarán con matplotlib.")
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+    PLOTLY_AVAILABLE = False
 
 # Configuración de la página
 st.set_page_config(
@@ -305,52 +315,102 @@ def crear_grafico_iron_condor(datos, strikes):
     rango_inferior = strikes['buy_put'] - 50
     rango_superior = strikes['buy_call'] + 50
     
-    # Crear gráfico
-    fig = go.Figure()
-    
-    # Línea vertical del SPX actual
-    fig.add_vline(
-        x=spx_actual, 
-        line_dash="dash", 
-        line_color="blue",
-        annotation_text=f"SPX Actual: ${spx_actual:,.0f}"
-    )
-    
-    # Strikes
-    strikes_data = [
-        (strikes['buy_put'], "Buy Put", "red"),
-        (strikes['sell_put'], "Sell Put", "green"),
-        (strikes['sell_call'], "Sell Call", "green"),
-        (strikes['buy_call'], "Buy Call", "red")
-    ]
-    
-    for strike, label, color in strikes_data:
+    if PLOTLY_AVAILABLE:
+        # Versión con Plotly
+        fig = go.Figure()
+        
+        # Línea vertical del SPX actual
         fig.add_vline(
-            x=strike,
-            line_color=color,
-            annotation_text=f"{label}: ${strike:,}",
-            annotation_position="top"
+            x=spx_actual, 
+            line_dash="dash", 
+            line_color="blue",
+            annotation_text=f"SPX Actual: ${spx_actual:,.0f}"
         )
-    
-    # Zona de rentabilidad
-    fig.add_vrect(
-        x0=strikes['sell_put'],
-        x1=strikes['sell_call'],
-        fillcolor="green",
-        opacity=0.2,
-        annotation_text="Zona de Ganancia",
-        annotation_position="inside top"
-    )
-    
-    fig.update_layout(
-        title="Iron Condor - Distribución de Strikes",
-        xaxis_title="Precio del SPX",
-        yaxis_title="P&L",
-        height=400,
-        showlegend=False
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
+        
+        # Strikes
+        strikes_data = [
+            (strikes['buy_put'], "Buy Put", "red"),
+            (strikes['sell_put'], "Sell Put", "green"),
+            (strikes['sell_call'], "Sell Call", "green"),
+            (strikes['buy_call'], "Buy Call", "red")
+        ]
+        
+        for strike, label, color in strikes_data:
+            fig.add_vline(
+                x=strike,
+                line_color=color,
+                annotation_text=f"{label}: ${strike:,}",
+                annotation_position="top"
+            )
+        
+        # Zona de rentabilidad
+        fig.add_vrect(
+            x0=strikes['sell_put'],
+            x1=strikes['sell_call'],
+            fillcolor="green",
+            opacity=0.2,
+            annotation_text="Zona de Ganancia",
+            annotation_position="inside top"
+        )
+        
+        fig.update_layout(
+            title="Iron Condor - Distribución de Strikes",
+            xaxis_title="Precio del SPX",
+            yaxis_title="P&L",
+            height=400,
+            showlegend=False
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+    else:
+        # Versión alternativa con matplotlib y datos tabulares
+        st.write("**Iron Condor - Distribución de Strikes**")
+        
+        # Crear tabla visual de los strikes
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric(
+                label="🔴 Buy Put",
+                value=f"${strikes['buy_put']:,}",
+                delta=f"{strikes['buy_put'] - spx_actual:+,.0f}"
+            )
+        
+        with col2:
+            st.metric(
+                label="🟢 Sell Put", 
+                value=f"${strikes['sell_put']:,}",
+                delta=f"{strikes['sell_put'] - spx_actual:+,.0f}"
+            )
+        
+        with col3:
+            st.metric(
+                label="🟢 Sell Call",
+                value=f"${strikes['sell_call']:,}",
+                delta=f"{strikes['sell_call'] - spx_actual:+,.0f}"
+            )
+        
+        with col4:
+            st.metric(
+                label="🔴 Buy Call",
+                value=f"${strikes['buy_call']:,}",
+                delta=f"{strikes['buy_call'] - spx_actual:+,.0f}"
+            )
+        
+        # Información adicional
+        st.info(f"📍 **SPX Actual**: ${spx_actual:,.0f}")
+        st.success(f"💰 **Zona de Ganancia**: ${strikes['sell_put']:,} - ${strikes['sell_call']:,}")
+        
+        # Crear gráfico simple con métricas
+        ranges_data = {
+            'Strike': ['Buy Put', 'Sell Put', 'SPX Actual', 'Sell Call', 'Buy Call'],
+            'Precio': [strikes['buy_put'], strikes['sell_put'], spx_actual, strikes['sell_call'], strikes['buy_call']],
+            'Tipo': ['🔴 Compra', '🟢 Venta', '📍 Actual', '🟢 Venta', '🔴 Compra']
+        }
+        
+        df_ranges = pd.DataFrame(ranges_data)
+        st.dataframe(df_ranges, use_container_width=True)
 
 def crear_tabla_resumen(resultado):
     """Crear tabla resumen de resultados"""
